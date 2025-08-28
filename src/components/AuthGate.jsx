@@ -3,6 +3,7 @@ import apiService from '../services/api';
 
 const AuthGate = ({ children, onAuthenticated }) => {
   const [apiKey, setApiKey] = useState('');
+  const [apiUrl, setApiUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -11,7 +12,9 @@ const AuthGate = ({ children, onAuthenticated }) => {
   useEffect(() => {
     const checkExistingAuth = async () => {
       const savedKey = apiService.getApiKey();
-      if (savedKey) {
+      const savedUrl = apiService.getApiUrl();
+      
+      if (savedKey && savedUrl) {
         setIsLoading(true);
         try {
           const isValid = await apiService.testConnection();
@@ -40,12 +43,18 @@ const AuthGate = ({ children, onAuthenticated }) => {
       setError('Please enter an API key');
       return;
     }
+    
+    if (!apiUrl.trim()) {
+      setError('Please enter the API URL');
+      return;
+    }
 
     setIsLoading(true);
     setError('');
 
     try {
       apiService.setApiKey(apiKey.trim());
+      apiService.setApiUrl(apiUrl.trim());
       const isValid = await apiService.testConnection();
       
       if (isValid) {
@@ -65,8 +74,10 @@ const AuthGate = ({ children, onAuthenticated }) => {
 
   const handleLogout = () => {
     apiService.clearApiKey();
+    apiService.clearApiUrl();
     setIsAuthenticated(false);
     setApiKey('');
+    setApiUrl('');
     setError('');
   };
 
@@ -103,8 +114,23 @@ const AuthGate = ({ children, onAuthenticated }) => {
           
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
+              <label htmlFor="apiUrl" className="block text-sm font-medium text-gray-200 mb-2">
+                Google Apps Script URL
+              </label>
+              <input
+                type="url"
+                id="apiUrl"
+                value={apiUrl}
+                onChange={(e) => setApiUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/your-script-id/exec"
+                className="form-input w-full"
+                disabled={isLoading}
+              />
+            </div>
+            
+            <div>
               <label htmlFor="apiKey" className="block text-sm font-medium text-gray-200 mb-2">
-                Enter API Key
+                API Key
               </label>
               <input
                 type="password"

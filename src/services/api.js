@@ -1,8 +1,10 @@
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxS9gCrwuSM0TANgypycym3cWibpPrscFpikJ5Y6CHvDCTfCnkx3fPyzlrksCIdGkDZYQ/exec';
+// API URL should be set via environment variable or user input
+const API_BASE_URL = process.env.VITE_API_URL || localStorage.getItem('apiUrl') || '';
 
 class ApiService {
   constructor() {
     this.apiKey = localStorage.getItem('apiKey');
+    this.apiUrl = localStorage.getItem('apiUrl') || '';
     this.cache = new Map();
     this.CACHE_DURATION = 2 * 60 * 1000; // 2 minutes cache
   }
@@ -21,10 +23,30 @@ class ApiService {
     localStorage.removeItem('apiKey');
   }
 
+  setApiUrl(url) {
+    this.apiUrl = url;
+    localStorage.setItem('apiUrl', url);
+  }
+
+  getApiUrl() {
+    return this.apiUrl || localStorage.getItem('apiUrl') || process.env.VITE_API_URL || '';
+  }
+
+  clearApiUrl() {
+    this.apiUrl = '';
+    localStorage.removeItem('apiUrl');
+  }
+
   async makeRequest(action, params = {}) {
     const apiKey = this.getApiKey();
+    const apiUrl = this.getApiUrl();
+    
     if (!apiKey) {
       throw new Error('API key not found');
+    }
+    
+    if (!apiUrl) {
+      throw new Error('API URL not configured');
     }
 
     // Check cache for cacheable actions (filterOptions, transactions without batching)
@@ -43,7 +65,7 @@ class ApiService {
       const startTime = Date.now();
       const callbackName = 'jsonp_callback_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
       
-      const url = new URL(API_BASE_URL);
+      const url = new URL(apiUrl);
       url.searchParams.set('action', action);
       url.searchParams.set('apiKey', apiKey);
       url.searchParams.set('callback', callbackName);
