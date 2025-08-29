@@ -1,5 +1,5 @@
 // API URL should be set via environment variable or user input
-const API_BASE_URL = process.env.VITE_API_URL || localStorage.getItem('apiUrl') || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || localStorage.getItem('apiUrl') || '';
 
 class ApiService {
   constructor() {
@@ -29,7 +29,7 @@ class ApiService {
   }
 
   getApiUrl() {
-    return this.apiUrl || localStorage.getItem('apiUrl') || process.env.VITE_API_URL || '';
+    return this.apiUrl || localStorage.getItem('apiUrl') || import.meta.env.VITE_API_URL || '';
   }
 
   clearApiUrl() {
@@ -256,6 +256,24 @@ class ApiService {
       return true;
     } catch (error) {
       return false;
+    }
+  }
+
+  // User preferences storage
+  async setUserPreference(key, value) {
+    return this.makeRequest('setUserPreference', { 
+      preferenceKey: key, 
+      preferenceValue: JSON.stringify(value) 
+    });
+  }
+
+  async getUserPreference(key) {
+    try {
+      const result = await this.makeRequest('getUserPreference', { preferenceKey: key });
+      return result ? JSON.parse(result) : null;
+    } catch (error) {
+      console.warn('Failed to get user preference:', key, error);
+      return null;
     }
   }
 }

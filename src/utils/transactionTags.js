@@ -187,6 +187,30 @@ export const updateTransactionType = async (transactionId, newType) => {
 };
 
 /**
+ * Updates transaction category manually
+ * Uses optimistic updates with background API sync
+ */
+export const updateTransactionCategory = async (transactionId, newCategory) => {
+  // Update localStorage immediately for instant UI feedback
+  const customTags = JSON.parse(localStorage.getItem('customTransactionTags') || '{}');
+  customTags[transactionId] = { ...customTags[transactionId], category: newCategory };
+  localStorage.setItem('customTransactionTags', JSON.stringify(customTags));
+  
+  // Update backend in background (don't wait for response)
+  try {
+    const apiService = (await import('../services/api')).default;
+    // Fire and forget - update happens in background
+    apiService.setTransactionTag(transactionId, 'category', newCategory).catch(error => {
+      console.warn('Background API sync failed for transaction category:', error);
+      // Keep localStorage version - will sync on next page load
+    });
+  } catch (error) {
+    console.warn('Failed to initialize API sync for transaction category:', error);
+    // LocalStorage update already happened, so UI is still responsive
+  }
+};
+
+/**
  * Gets custom tag overrides from API and local cache
  */
 export const getCustomTags = (transactionId, apiTags = {}) => {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getFinalTags, getTypeTagConfig, getMethodTagConfig, updateTransactionType } from '../utils/transactionTags';
+import { getAvailableTypes } from '../utils/categoryManager';
 
 const TransactionTags = ({ transaction, allTransactions = [], editable = false, size = 'sm', onTagUpdate }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -19,19 +20,22 @@ const TransactionTags = ({ transaction, allTransactions = [], editable = false, 
   
   const handleTypeEdit = async (newType) => {
     try {
+      // Handle clearing type
+      const typeToSave = newType === 'clear' ? 'unknown' : newType;
+      
       // Optimistically update the local tags immediately
       setLocalTags(prevTags => ({
         ...(prevTags || getFinalTags(transaction, allTransactions)),
-        type: newType
+        type: typeToSave
       }));
       setIsEditing(false);
       
       // Update backend in background
-      await updateTransactionType(transaction.Transaction_ID, newType);
+      await updateTransactionType(transaction.Transaction_ID, typeToSave);
       
       // Notify parent component if callback provided
       if (onTagUpdate) {
-        onTagUpdate(transaction.Transaction_ID, { type: newType });
+        onTagUpdate(transaction.Transaction_ID, { type: typeToSave });
       }
       
     } catch (error) {
@@ -42,12 +46,7 @@ const TransactionTags = ({ transaction, allTransactions = [], editable = false, 
     }
   };
   
-  const typeOptions = [
-    'internal',
-    'bill-payment', 
-    'income',
-    'spending'
-  ];
+  const typeOptions = getAvailableTypes();
 
   return (
     <div className="flex gap-1 flex-wrap items-center">
@@ -62,6 +61,8 @@ const TransactionTags = ({ transaction, allTransactions = [], editable = false, 
             autoFocus
           >
             <option value="">Select type...</option>
+            <option value="clear" className="text-red-400">Clear Type</option>
+            <option disabled>—————————</option>
             {typeOptions.map(type => {
               const config = getTypeTagConfig(type);
               return (

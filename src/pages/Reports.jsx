@@ -42,6 +42,7 @@ const Reports = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [categoryModal, setCategoryModal] = useState({ isOpen: false, merchant: '', transactionId: '' });
+  const [sortConfig, setSortConfig] = useState({ key: 'Timestamp', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const [transactionsPerPage] = useState(50);
   const [localTagUpdates, setLocalTagUpdates] = useState({});
@@ -114,6 +115,43 @@ const Reports = () => {
       ...prev,
       [key]: prev[key].length === allOptions.length ? [] : [...allOptions]
     }));
+  };
+
+  // Sorting functionality
+  const handleSort = (key) => {
+    setSortConfig(prevSort => ({
+      key,
+      direction: prevSort.key === key && prevSort.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const sortTransactions = (transactions, sortConfig) => {
+    if (!sortConfig.key) return transactions;
+    
+    return [...transactions].sort((a, b) => {
+      let aVal = a[sortConfig.key];
+      let bVal = b[sortConfig.key];
+      
+      // Special handling for different data types
+      if (sortConfig.key === 'Timestamp') {
+        aVal = new Date(aVal);
+        bVal = new Date(bVal);
+      } else if (sortConfig.key === 'Amount') {
+        aVal = Math.abs(parseFloat(aVal) || 0);
+        bVal = Math.abs(parseFloat(bVal) || 0);
+      } else if (typeof aVal === 'string') {
+        aVal = aVal?.toLowerCase() || '';
+        bVal = bVal?.toLowerCase() || '';
+      }
+      
+      if (aVal < bVal) {
+        return sortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aVal > bVal) {
+        return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
   };
 
   const applyFiltersWithData = async (filtersToUse = filters) => {
@@ -324,10 +362,30 @@ const Reports = () => {
   };
 
   // Calculate pagination
+  // Apply sorting before pagination
+  const sortedTransactions = sortTransactions(transactions, sortConfig);
   const indexOfLastTransaction = currentPage * transactionsPerPage;
   const indexOfFirstTransaction = indexOfLastTransaction - transactionsPerPage;
-  const currentTransactions = transactions.slice(indexOfFirstTransaction, indexOfLastTransaction);
-  const totalPages = Math.ceil(transactions.length / transactionsPerPage);
+  const currentTransactions = sortedTransactions.slice(indexOfFirstTransaction, indexOfLastTransaction);
+  const totalPages = Math.ceil(sortedTransactions.length / transactionsPerPage);
+
+  // Sortable header component
+  const SortableHeader = ({ field, children, className = "" }) => (
+    <th 
+      className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-600/50 select-none ${className}`}
+      onClick={() => handleSort(field)}
+      title={`Sort by ${children}`}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        <span className="text-gray-400 text-xs">
+          {sortConfig.key === field ? (
+            sortConfig.direction === 'asc' ? '↑' : '↓'
+          ) : '↕'}
+        </span>
+      </div>
+    </th>
+  );
 
   // Pagination component
   const PaginationControls = () => (
@@ -629,24 +687,14 @@ const Reports = () => {
               <table className="min-w-full divide-y divide-gray-700">
                 <thead>
                   <tr className="table-header">
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                      Merchant
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                      Amount
-                    </th>
+                    <SortableHeader field="Timestamp">Date</SortableHeader>
+                    <SortableHeader field="Recipient_Merchant">Merchant</SortableHeader>
+                    <SortableHeader field="Amount">Amount</SortableHeader>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
                       Tags
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                      Category
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                      Bank
-                    </th>
+                    <SortableHeader field="Category">Category</SortableHeader>
+                    <SortableHeader field="Bank">Bank</SortableHeader>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700">

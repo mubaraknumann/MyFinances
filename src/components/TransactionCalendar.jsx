@@ -2,21 +2,29 @@ import { useState, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths } from 'date-fns';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { getActualTransactions } from '../utils/transactionFilters';
-import { updateTransactionType } from '../utils/transactionTags';
+import { updateTransactionCategory } from '../utils/transactionTags';
+import { getAvailableCategories, addCustomCategory, formatCategoryName, isValidCategoryName } from '../utils/categoryManager';
 
 // Category Editor Component
 const CategoryEditor = ({ transaction, onUpdate }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editingCategory, setEditingCategory] = useState('');
   const [currentCategory, setCurrentCategory] = useState(transaction.Category);
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
   
+  const displayCategory = formatCategoryName(currentCategory);
   const hasCategory = currentCategory && currentCategory !== 'Uncategorized';
   
   const handleCategoryEdit = async (newCategory) => {
     try {
-      await updateTransactionType(transaction.Transaction_ID, newCategory);
-      setCurrentCategory(newCategory);
+      // Handle clearing category
+      const categoryToSave = newCategory === 'clear' ? null : newCategory;
+      await updateTransactionCategory(transaction.Transaction_ID, categoryToSave);
+      setCurrentCategory(categoryToSave);
       setIsEditing(false);
+      setShowCustomInput(false);
+      setCustomCategoryInput('');
       if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Failed to update category:', error);
@@ -24,36 +32,93 @@ const CategoryEditor = ({ transaction, onUpdate }) => {
     }
   };
   
-  const categories = [
-    'Food & Dining',
-    'Shopping', 
-    'Entertainment',
-    'Transport',
-    'Bills & Utilities',
-    'Healthcare',
-    'Travel',
-    'Education',
-    'Investment',
-    'Other'
-  ];
+  const handleCustomCategorySubmit = () => {
+    const customCategory = customCategoryInput.trim();
+    if (!isValidCategoryName(customCategory)) {
+      alert('Please enter a valid category name (1-50 characters)');
+      return;
+    }
+    
+    // Add to custom categories if it's new
+    if (addCustomCategory(customCategory)) {
+      console.log('Added new custom category:', customCategory);
+    }
+    
+    // Use the custom category
+    handleCategoryEdit(customCategory);
+  };
+  
+  const categories = getAvailableCategories();
   
   return (
     <div className="mt-1">
       {isEditing ? (
-        <select
-          value={editingCategory}
-          onChange={(e) => handleCategoryEdit(e.target.value)}
-          onBlur={() => setIsEditing(false)}
-          className="bg-gray-700 border border-gray-600 rounded text-xs px-2 py-1 text-white w-full"
-          autoFocus
-        >
-          <option value="">Select category...</option>
-          {categories.map(category => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
+        <div className="space-y-2">
+          {!showCustomInput ? (
+            <select
+              value={editingCategory}
+              onChange={(e) => {
+                if (e.target.value === 'add-custom') {
+                  setShowCustomInput(true);
+                  setCustomCategoryInput('');
+                } else {
+                  handleCategoryEdit(e.target.value);
+                }
+              }}
+              onBlur={() => !showCustomInput && setIsEditing(false)}
+              className="bg-gray-700 border border-gray-600 rounded text-xs px-2 py-1 text-white w-full"
+              autoFocus
+            >
+              <option value="">Select category...</option>
+              <option value="clear" className="text-red-400">Clear Category</option>
+              <option disabled>—————————</option>
+              {categories.map(category => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+              <option disabled>—————————</option>
+              <option value="add-custom" className="text-green-400">Add New Category</option>
+            </select>
+          ) : (
+            <div className="flex gap-1">
+              <input
+                type="text"
+                value={customCategoryInput}
+                onChange={(e) => setCustomCategoryInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleCustomCategorySubmit();
+                  } else if (e.key === 'Escape') {
+                    setShowCustomInput(false);
+                    setIsEditing(false);
+                  }
+                }}
+                placeholder="New category..."
+                className="bg-gray-700 border border-gray-600 rounded text-xs px-2 py-1 text-white flex-1"
+                autoFocus
+                maxLength={50}
+              />
+              <button
+                onClick={handleCustomCategorySubmit}
+                className="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1 rounded"
+                title="Add category"
+              >
+                ✓
+              </button>
+              <button
+                onClick={() => {
+                  setShowCustomInput(false);
+                  setIsEditing(false);
+                }}
+                className="bg-gray-600 hover:bg-gray-700 text-white text-xs px-2 py-1 rounded"
+                title="Cancel"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
       ) : (
         <span
           className={`inline-block px-2 py-1 text-xs rounded cursor-pointer hover:opacity-80 ${
@@ -67,7 +132,7 @@ const CategoryEditor = ({ transaction, onUpdate }) => {
           }}
           title="Click to edit category"
         >
-          {hasCategory ? currentCategory : 'Uncategorized'}
+          {displayCategory}
         </span>
       )}
     </div>
