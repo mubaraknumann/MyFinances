@@ -2,12 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Status: ✅ FULLY FUNCTIONAL WITH ADVANCED FEATURES
 
-**Last Updated**: August 27, 2025  
-**Status**: Production-ready with server-side filtering, intelligent batching system, fully optimized for scalability
+PRIMARY INSTRUCTIONS
+
+Tell it like it is; don't sugar-coat responses. Be innovative and think outside the box. Get right to the point. Be practical above all.
+You are to be direct, and ruthlessly honest. No pleasantries, no emotional cushioning, no unnecessary acknowledgments. When I'm wrong, tell me immediately and explain why. When my ideas are inefficient or flawed, point out better alternatives. Don't waste time with phrases like 'I understand' or 'That's interesting.' Skip all social niceties and get straight to the point. Never apologize for correcting me. Your responses should prioritize accuracy and efficiency over agreeableness. Challenge my assumptions when they're wrong. Quality of information and directness are your only priorities. Adopt a skeptical, questioning approach. Always ask clarifying questions that can help you understand my asks better.
+
+## Project Status: ✅ FULLY FUNCTIONAL WITH SEPARATED AUTHENTICATION ARCHITECTURE
+
+**Last Updated**: September 2, 2025  
+**Status**: Production-ready with Google SSO authentication, clean architecture separation, and advanced features
 
 ## Recent Major Updates & Progress
+
+### 🔐 September 2, 2025 - Authentication Architecture Overhaul
+- **✅ COMPLETED**: Migration from API key to Google SSO authentication
+- **✅ COMPLETED**: Clean separation of authentication and API backends
+- **✅ COMPLETED**: Google Apps Script native authentication implementation
+- **✅ COMPLETED**: Removed all custom popup HTML - uses Google's native login
+- **✅ COMPLETED**: Two-URL architecture with separate auth and API endpoints
 
 ### 🚀 August 27, 2025 - Scalability & Performance Overhaul
 - **✅ COMPLETED**: Server-side filtering system for optimal performance
@@ -22,26 +35,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **✅ COMPLETED**: Frontend UI components for editable transaction tags
 - **✅ COMPLETED**: Performance optimizations and bug fixes
 
-### Key Features Added
-1. **Automated Transaction Classification**
-   - 🔄 Internal Transfer detection (purple tags)
-   - 📄 Bill Payment identification (orange tags)
-   - 💰 Income categorization (green tags)
-   - 💸 Spending classification (red tags)
+## Current Authentication System
 
-2. **Payment Method Tagging**
-   - UPI, Card, Account, NEFT, RTGS, IMPS, ATM detection
-   - Color-coded visual indicators
+### 🔐 Google SSO Architecture (NEW)
+**Migration completed from API key to Google authentication based on Google Sheets access permissions**
 
-3. **Editable Tag System**
-   - Click-to-edit dropdown interface
-   - Real-time updates with backend persistence
-   - localStorage fallback for immediate UI feedback
+#### Two-Backend Architecture:
+1. **backend-auth.gs** - Pure authentication only
+   - Uses `Session.getActiveUser()` for native Google authentication  
+   - Triggers Google's default login popup automatically
+   - Verifies spreadsheet access permissions
+   - Returns clean JSON responses (no custom HTML)
 
-4. **Enhanced Backend Integration**
-   - New API endpoints: `setTransactionTag`, `getTransactionTags`, `getAllTransactionTags`
-   - Google Sheets "Transaction Tags" sheet for persistent storage
-   - Enhanced `getTransactions` endpoint with `CustomTags` field
+2. **backend-api.gs** - Pure data operations only
+   - All transaction, summary, and chart data endpoints
+   - Category rules and transaction tags management
+   - Caching and batching for performance
+   - JSONP support for cross-origin requests
+
+#### Frontend Changes:
+- **AuthGate.jsx** now handles two separate URLs:
+  - Authentication URL (for Google login)
+  - API URL (for data operations)
+- URLs saved permanently in localStorage (one-time setup)
+- Pure Google native authentication popup (no custom UI)
+- Automatic API connection testing after authentication
+
+### Setup Flow:
+1. User enters **Authentication URL** and **API URL** (one-time)
+2. Google's native authentication popup appears automatically
+3. Access verified based on Google Sheets permissions
+4. All subsequent API calls use the separate API URL
 
 ## Development Commands
 
@@ -71,37 +95,50 @@ npm run lint
 - **Charts**: Chart.js + React-ChartJS-2
 - **UI Components**: Headless UI + Heroicons
 - **Date Handling**: date-fns
+- **Authentication**: Google SSO via Google Apps Script
 
 ### Enhanced Project Structure
 ```
 src/
 ├── components/              # Reusable UI components
-│   ├── AuthGate.jsx        # API key authentication
+│   ├── AuthGate.jsx        # ✨ UPDATED: Google SSO with two-URL setup
 │   ├── Layout.jsx          # Main app layout with sidebar
 │   ├── CategoryModal.jsx   # Transaction categorization modal
-│   └── TransactionTags.jsx # ✨ NEW: Editable transaction tag component
+│   └── TransactionTags.jsx # Editable transaction tag component
 ├── pages/                  # Main application pages
 │   ├── Dashboard.jsx       # KPI cards and spending charts
 │   ├── Transactions.jsx    # Enhanced: Now with transaction tags
 │   └── Reports.jsx         # Enhanced: Integrated transaction tags
 ├── services/               # API and external service integrations
-│   └── api.js             # Enhanced: New tag management endpoints
-├── utils/                  # ✨ NEW: Utility functions
+│   └── api.js             # ✨ UPDATED: Works with separate API URL
+├── utils/                  # Utility functions
 │   ├── transactionFilters.js # Internal transfer detection logic
 │   └── transactionTags.js    # Transaction classification and tagging
 └── hooks/                  # Custom React hooks (if any)
+
+Backend Files:
+├── backend-auth.gs         # ✨ NEW: Pure authentication backend
+├── backend-api.gs          # ✨ UPDATED: Pure API backend  
+├── backend-unified.gs      # ⚠️ DEPRECATED: Old unified approach
+└── backend-script.gs       # ⚠️ DEPRECATED: Old API key approach
 ```
 
 ### Enhanced API Integration
 
-#### Core Endpoints (Existing)
-- `getTransactions` - **Enhanced**: Now includes `CustomTags` field
+#### Authentication Endpoints (backend-auth.gs)
+- **GET /**: Triggers Google native authentication
+- Returns user data JSON on successful authentication
+- Verifies Google Sheets access permissions
+- No custom HTML - pure JSON responses
+
+#### Core API Endpoints (backend-api.gs)
+- `getTransactions` - Enhanced with server-side filtering + CustomTags field
 - `getSummary` - Get spending/income summaries for periods
 - `getChartData` - Pre-aggregated data for charts
 - `getFilterOptions` - Available filter options (banks, methods, types)
 - `setCategoryRule` - Create merchant categorization rules
 
-#### New Tag Management Endpoints
+#### Tag Management Endpoints
 - `setTransactionTag` - Save custom tags for specific transactions
 - `getTransactionTags` - Retrieve tags for a specific transaction
 - `getAllTransactionTags` - Bulk retrieve all transaction tags
@@ -144,29 +181,22 @@ src/
 - 💾 **Smart caching**: Subsequent requests near-instant
 
 #### 🔄 Backend Synchronization Requirements
-**CRITICAL**: Always keep backend `updated-backend-script.gs` synchronized with frontend features:
-- ✅ Server-side filtering parameters added
-- ✅ Intelligent batching system implemented  
-- ✅ Response format enhanced with batch metadata
-- ✅ Backward compatibility maintained for legacy calls
-
-#### 2. Data Quality Issues
-**Problem**: Duplicate Transaction_IDs in backend data
-**Solution**: Enhanced React key generation using composite keys
-```javascript
-key={`${transaction.Transaction_ID}-${transaction.Timestamp}-${transaction.Amount}-${index}`}
-```
+**CRITICAL**: Always keep both backend files synchronized with frontend features:
+- ✅ Server-side filtering parameters added to API backend
+- ✅ Intelligent batching system implemented in API backend
+- ✅ Pure authentication logic in auth backend  
+- ✅ Clean separation maintained between auth and API concerns
 
 ### Key Features
 
-#### Core Features (Existing)
-1. **Authentication**: Secure API key-based authentication stored in localStorage
+#### Core Features
+1. **Google SSO Authentication**: Secure Google-based authentication with spreadsheet access control
 2. **Dashboard**: Real-time KPIs and 14-day spending visualization
 3. **Transaction Management**: Searchable transaction log with categorization
 4. **Reports**: Customizable date-range reports with category breakdowns
 5. **Responsive Design**: Mobile-first design with collapsible sidebar navigation
 
-#### Advanced Features (New)
+#### Advanced Features
 6. **Automated Transaction Classification**: Smart categorization of transaction types
 7. **Editable Transaction Tags**: User-customizable transaction type overrides
 8. **Internal Transfer Detection**: Sophisticated paired-transaction analysis
@@ -198,49 +228,56 @@ const billPatterns = [
 - Data-first approach prioritizing readability and functionality
 - Fully responsive layout adapting from mobile to desktop
 - No gradients - uses solid colors and subtle shadows for depth
-- **New**: Color-coded transaction tags with intuitive icons
+- Color-coded transaction tags with intuitive icons
 
 ### Current System Status
-1. **Performance**: ✅ OPTIMIZED - 3-5 second response times with intelligent batching
-2. **Scalability**: ✅ FUTURE-PROOF - Handles thousands of transactions via batching
-3. **Data Quality**: ⚠️ Some duplicate Transaction_IDs in source data (handled via composite keys)
-4. **Caching**: ✅ ADVANCED - Multi-layer caching with complete dataset optimization
+1. **Authentication**: ✅ GOOGLE SSO - Native Google authentication with permissions-based access
+2. **Performance**: ✅ OPTIMIZED - 3-5 second response times with intelligent batching
+3. **Scalability**: ✅ FUTURE-PROOF - Handles thousands of transactions via batching
+4. **Architecture**: ✅ CLEAN SEPARATION - Distinct auth and API backends
+5. **Caching**: ✅ ADVANCED - Multi-layer caching with complete dataset optimization
 
 ### Deployment Status
 - **Frontend**: Development server running on http://localhost:3000
-- **Backend**: Google Apps Script deployed with latest enhancements
+- **Authentication Backend**: Google Apps Script (backend-auth.gs) - Deploy separately
+- **API Backend**: Google Apps Script (backend-api.gs) - Deploy separately
 - **Database**: Google Sheets with "Transaction Tags" sheet for persistence
-- **API Key**: Current: `sk-75a8b7a2-8939-459a-b91b-39cc2d426754`
+- **Access Control**: Based on Google Sheets sharing permissions
 
 ### Files Ready for Production
-1. `updated-backend-script.gs` - ✅ ENHANCED: Server-side filtering + intelligent batching
-2. All frontend components optimized for scalability and mobile responsiveness  
-3. API service layer with intelligent batching and hybrid filtering
-4. Advanced caching system with complete transaction set optimization
+1. **backend-auth.gs** - ✅ Pure Google authentication backend
+2. **backend-api.gs** - ✅ Pure API backend with server-side filtering + intelligent batching
+3. **AuthGate.jsx** - ✅ Updated for two-URL Google SSO flow
+4. All other frontend components optimized for scalability and mobile responsiveness  
+
+### Deployment Instructions
+1. **Deploy backend-auth.gs** as Web App (Execute as "Me", Access "Anyone") → Get Auth URL
+2. **Deploy backend-api.gs** as Web App (Execute as "Me", Access "Anyone") → Get API URL
+3. **Update both scripts** with your Google Sheets ID
+4. **Enter both URLs** in MyFinances setup (one-time configuration)
+5. **Share your Google Sheet** with users who need access
 
 ### Testing & Quality Assurance
+- ✅ Google SSO authentication tested and functional
 - ✅ Backend API endpoints tested and functional
-- ✅ Frontend components rendering correctly
+- ✅ Frontend components rendering correctly with new auth flow
 - ✅ Tag persistence verified with Google Sheets storage
 - ✅ Duplicate key warnings resolved
 - ✅ Error handling and fallback mechanisms in place
-
-### Next Steps for Optimization
-1. **Performance**: Implement pagination and advanced caching
-2. **UX**: Add loading progress indicators
-3. **Data**: Consider data cleanup for duplicate Transaction_IDs
-4. **Features**: Add bulk tag editing capabilities
-5. **Analytics**: Enhanced reporting with tag-based insights
+- ✅ Two-URL setup flow tested and working
 
 ---
 
 ## API Documentation
 
 ### Authentication
-Every API request requires an apiKey parameter:
-```
-?apiKey=sk-75a8b7a2-8939-459a-b91b-39cc2d426754
-```
+**NEW**: No API key required. Access control is managed through Google authentication and Google Sheets sharing permissions.
+
+#### Authentication Flow:
+1. User visits Authentication URL → Google native login popup
+2. System verifies Google Sheets access permissions  
+3. Returns user data JSON on success
+4. Frontend uses separate API URL for all data operations
 
 ### Enhanced Transaction Response Format
 ```json
@@ -261,4 +298,4 @@ Every API request requires an apiKey parameter:
 }
 ```
 
-The application is now feature-complete with advanced transaction tagging capabilities and is ready for production use.
+The application now features clean architecture separation with Google SSO authentication and is ready for production deployment with enhanced security and maintainability.

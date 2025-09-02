@@ -1,36 +1,25 @@
 // =================================================================
-// CONFIGURATION
+// MYFINANCES API BACKEND - CLEAN VERSION (API ONLY)
 // =================================================================
+// CONFIGURATION - UPDATE THESE VALUES FOR YOUR SETUP
+// =================================================================
+const SPREADSHEET_ID = 'your-google-sheet-id-here'; // UPDATE: Your Google Sheet ID
+const DEST_SHEET_NAME = 'Sheet1'; // UPDATE: Your main transaction sheet name
 const CATEGORY_RULES_SHEET_NAME = "Category Rules";
 const TRANSACTION_TAGS_SHEET_NAME = "Transaction Tags";
 // =================================================================
 
 /**
- * Main entry point for all GET requests. Acts as a router for the web app API.
- * This function should be in its own .gs file (e.g., API.gs).
- * @param {Object} e - The event parameter from the web app request.
+ * Main entry point for all GET requests. Pure API - no authentication logic.
  */
 function doGet(e) {
   try {
-    // --- URL PARAMETER AUTHENTICATION ---
-    const storedKey = PropertiesService.getScriptProperties().getProperty('API_SECRET_KEY');
-    const apiKey = e.parameter.apiKey;
-
-    if (!apiKey || apiKey !== storedKey) {
-      Logger.log(`Unauthorized access. Expected: ${storedKey}, Received: ${apiKey}`);
-      const errorResponse = { error: 'Unauthorized - Invalid API key' };
-      return createJsonpResponse(errorResponse, e.parameter.callback);
-    }
-
-    Logger.log('Authentication successful');
-    // --- END AUTHENTICATION ---
-
-    const action = e.parameter.action;
+    // No authentication handling here - this is pure API
     const cache = CacheService.getScriptCache();
     const cacheKey = JSON.stringify(e.parameter);
 
     const CACHEABLE_ACTIONS = ['getSummary', 'getFilterOptions', 'getTransactions'];
-    if (CACHEABLE_ACTIONS.includes(action)) {
+    if (CACHEABLE_ACTIONS.includes(e.parameter.action)) {
       const cached = cache.get(cacheKey);
       if (cached) {
         return createJsonpResponse(JSON.parse(cached), e.parameter.callback);
@@ -38,16 +27,36 @@ function doGet(e) {
     }
 
     let result = {};
-    switch (action) {
-      case 'getTransactions': result = getTransactions_(e.parameter); cache.put(cacheKey, JSON.stringify(result), 1800); break;
-      case 'getSummary': result = getSummary_(e.parameter); cache.put(cacheKey, JSON.stringify(result), 3600); break;
-      case 'getChartData': result = getChartData_(e.parameter); break;
-      case 'getFilterOptions': result = getFilterOptions_(); cache.put(cacheKey, JSON.stringify(result), 21600); break;
-      case 'setCategoryRule': result = setCategoryRule_(e.parameter); break;
-      case 'setTransactionTag': result = setTransactionTag_(e.parameter); break;
-      case 'getTransactionTags': result = getTransactionTags_(e.parameter); break;
-      case 'getAllTransactionTags': result = getAllTransactionTags_(); break;
-      default: result = { error: 'Invalid action specified.' };
+    switch (e.parameter.action) {
+      case 'getTransactions': 
+        result = getTransactions_(e.parameter); 
+        cache.put(cacheKey, JSON.stringify(result), 1800); 
+        break;
+      case 'getSummary': 
+        result = getSummary_(e.parameter); 
+        cache.put(cacheKey, JSON.stringify(result), 3600); 
+        break;
+      case 'getChartData': 
+        result = getChartData_(e.parameter); 
+        break;
+      case 'getFilterOptions': 
+        result = getFilterOptions_(); 
+        cache.put(cacheKey, JSON.stringify(result), 21600); 
+        break;
+      case 'setCategoryRule': 
+        result = setCategoryRule_(e.parameter); 
+        break;
+      case 'setTransactionTag': 
+        result = setTransactionTag_(e.parameter); 
+        break;
+      case 'getTransactionTags': 
+        result = getTransactionTags_(e.parameter); 
+        break;
+      case 'getAllTransactionTags': 
+        result = getAllTransactionTags_(); 
+        break;
+      default: 
+        result = { error: 'Invalid action specified.' };
     }
 
     return createJsonpResponse(result, e.parameter.callback);
@@ -98,7 +107,6 @@ function getAllData_() {
   if (categorySheet && categorySheet.getLastRow() > 1) {
     const rulesData = categorySheet.getDataRange().getValues();
     rulesData.slice(1).forEach(row => {
-      // --- CASE-INSENSITIVE: Store all merchant rules as lowercase ---
       if (row[0]) categoryRules[row[0].toLowerCase()] = row[1];
     });
   }
@@ -116,11 +124,10 @@ function getTransactions_(params) {
   const { transactions, categoryRules } = getAllData_();
   let data = transactions;
 
-  // Date range filtering (new comprehensive approach)
+  // Date range filtering
   if (params.startDate && params.endDate) {
     const startDate = new Date(params.startDate);
     const endDate = new Date(params.endDate);
-    // Set endDate to end of day to include transactions on the end date
     endDate.setHours(23, 59, 59, 999);
     
     data = data.filter(r => {
@@ -129,32 +136,29 @@ function getTransactions_(params) {
     });
   }
 
-  // Legacy date filtering (kept for backward compatibility)
+  // Legacy date filtering
   if (params.year) data = data.filter(r => r.Timestamp.getFullYear() == params.year);
   if (params.month) data = data.filter(r => (r.Timestamp.getMonth() + 1) == params.month);
 
-  // Bank filtering (supports multiple banks)
+  // Bank filtering
   if (params.banks && params.banks.trim()) {
     const bankList = params.banks.split(',').map(b => b.trim());
     data = data.filter(r => bankList.includes(r.Bank));
   }
-  // Legacy single bank filter (kept for backward compatibility)
   if (params.bank) data = data.filter(r => r.Bank === params.bank);
 
-  // Transaction method filtering (supports multiple methods)
+  // Transaction method filtering
   if (params.methods && params.methods.trim()) {
     const methodList = params.methods.split(',').map(m => m.trim());
     data = data.filter(r => methodList.includes(r.Transaction_Method));
   }
-  // Legacy single method filter (kept for backward compatibility)
   if (params.method) data = data.filter(r => r.Transaction_Method === params.method);
 
-  // Transaction type filtering (supports multiple types)
+  // Transaction type filtering
   if (params.types && params.types.trim()) {
     const typeList = params.types.split(',').map(t => t.trim());
     data = data.filter(r => typeList.includes(r.Debit_Credit));
   }
-  // Legacy single type filter (kept for backward compatibility)
   if (params.type) data = data.filter(r => r.Debit_Credit === params.type);
 
   // Text search filtering
@@ -164,26 +168,20 @@ function getTransactions_(params) {
   const allTags = getAllTransactionTags_();
 
   data.forEach(row => {
-    // --- CASE-INSENSITIVE: Check the lowercase version of the merchant against the rules ---
     row.Category = categoryRules[row.Recipient_Merchant.toLowerCase()] || "Uncategorized";
-    
-    // Apply custom tags
     row.CustomTags = allTags[row.Transaction_ID] || {};
   });
 
-  Logger.log(`getTransactions_: Filtered ${transactions.length} transactions to ${data.length} results with filters: ${JSON.stringify(params)}`);
+  Logger.log(`getTransactions_: Filtered ${transactions.length} transactions to ${data.length} results`);
   
-  // Handle batching for large responses to prevent JSONP size limits
+  // Handle batching for large responses
   const batchSize = parseInt(params.batchSize) || 0;
   const batchNumber = parseInt(params.batchNumber) || 0;
   
   if (batchSize > 0) {
-    // Return batched results
     const startIndex = batchNumber * batchSize;
     const endIndex = startIndex + batchSize;
     const batchedData = data.slice(startIndex, endIndex);
-    
-    Logger.log(`getTransactions_: Returning batch ${batchNumber} (${startIndex}-${endIndex}) of ${data.length} total transactions`);
     
     return {
       transactions: batchedData,
@@ -194,8 +192,6 @@ function getTransactions_(params) {
     };
   }
   
-  // For small datasets or when batching not requested, try to return all data
-  // If this fails due to size, the frontend will retry with batching
   return data;
 }
 
@@ -223,7 +219,7 @@ function getSummary_(params) {
 }
 
 function getChartData_(params) {
-  const data = getTransactions_(params); // Reuses transaction filtering and categorization
+  const data = getTransactions_(params);
 
   if (params.chartType === 'spendingByCategory') {
     const spendByCategory = {};
@@ -277,26 +273,24 @@ function setCategoryRule_(params) {
 
   const range = sheet.getDataRange();
   const data = range.getValues();
-  // --- CASE-INSENSITIVE: Standardize the merchant name before checking ---
   const merchantLower = params.merchant.toLowerCase();
   let ruleExists = false;
 
   for (let i = 1; i < data.length; i++) {
     if (data[i][0].toLowerCase() === merchantLower) {
-      sheet.getRange(i + 1, 2).setValue(params.category); // Update existing rule
+      sheet.getRange(i + 1, 2).setValue(params.category);
       ruleExists = true;
       break;
     }
   }
 
   if (!ruleExists) {
-    // Save the original casing for readability, but the logic uses lowercase
     sheet.appendRow([params.merchant, params.category]);
   }
 
-  // Clear relevant caches since the data will now be different
+  // Clear relevant caches
   const cache = CacheService.getScriptCache();
-  cache.removeAll(['getTransactions', 'getChartData', 'getFilterOptions', 'getSummary']); // Clear everything that might show categories
+  cache.removeAll(['getTransactions', 'getChartData', 'getFilterOptions', 'getSummary']);
 
   return { 
     status: 'success', 
@@ -310,9 +304,6 @@ function setCategoryRule_(params) {
  * =================================================================
  */
 
-/**
- * Sets a custom tag for a specific transaction
- */
 function setTransactionTag_(params) {
   if (!params.transactionId || !params.tagType || !params.tagValue) {
     throw new Error("Missing required parameters: transactionId, tagType, tagValue");
@@ -321,7 +312,6 @@ function setTransactionTag_(params) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(TRANSACTION_TAGS_SHEET_NAME);
   
-  // Create the sheet if it doesn't exist
   if (!sheet) {
     sheet = ss.insertSheet(TRANSACTION_TAGS_SHEET_NAME);
     sheet.appendRow(["Transaction_ID", "Tag_Type", "Tag_Value", "Updated_Date"]);
@@ -331,18 +321,15 @@ function setTransactionTag_(params) {
   const data = range.getValues();
   let rowFound = false;
 
-  // Look for existing tag for this transaction and type
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === params.transactionId && data[i][1] === params.tagType) {
-      // Update existing tag
-      sheet.getRange(i + 1, 3).setValue(params.tagValue); // Tag_Value
-      sheet.getRange(i + 1, 4).setValue(new Date()); // Updated_Date
+      sheet.getRange(i + 1, 3).setValue(params.tagValue);
+      sheet.getRange(i + 1, 4).setValue(new Date());
       rowFound = true;
       break;
     }
   }
 
-  // If no existing tag found, add new row
   if (!rowFound) {
     sheet.appendRow([
       params.transactionId,
@@ -352,7 +339,6 @@ function setTransactionTag_(params) {
     ]);
   }
 
-  // Clear relevant caches since tag data has changed
   const cache = CacheService.getScriptCache();
   cache.removeAll(['getTransactions', 'getAllTransactionTags']);
 
@@ -362,9 +348,6 @@ function setTransactionTag_(params) {
   };
 }
 
-/**
- * Gets all custom tags for a specific transaction
- */
 function getTransactionTags_(params) {
   if (!params.transactionId) {
     throw new Error("Missing required parameter: transactionId");
@@ -374,39 +357,34 @@ function getTransactionTags_(params) {
   const sheet = ss.getSheetByName(TRANSACTION_TAGS_SHEET_NAME);
   
   if (!sheet || sheet.getLastRow() <= 1) {
-    return {}; // No tags found
+    return {};
   }
 
   const range = sheet.getDataRange();
   const data = range.getValues();
   const tags = {};
 
-  // Find all tags for this transaction
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === params.transactionId) {
-      tags[data[i][1]] = data[i][2]; // tagType: tagValue
+      tags[data[i][1]] = data[i][2];
     }
   }
 
   return tags;
 }
 
-/**
- * Gets all transaction tags (for bulk operations)
- */
 function getAllTransactionTags_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(TRANSACTION_TAGS_SHEET_NAME);
   
   if (!sheet || sheet.getLastRow() <= 1) {
-    return {}; // No tags found
+    return {};
   }
 
   const range = sheet.getDataRange();
   const data = range.getValues();
   const allTags = {};
 
-  // Group tags by transaction ID
   for (let i = 1; i < data.length; i++) {
     const transactionId = data[i][0];
     const tagType = data[i][1];
@@ -422,22 +400,13 @@ function getAllTransactionTags_() {
 }
 
 // =================================================================
-// NOTES FOR DEPLOYMENT:
+// SETUP INSTRUCTIONS:
 // =================================================================
 // 
-// 1. Replace your existing Google Apps Script code with this updated version
-// 2. Make sure to set your SPREADSHEET_ID and DEST_SHEET_NAME constants
-// 3. Deploy as a new version of your web app
-// 4. Test the new transaction tag functionality in your frontend
-//
-// New sheets that will be created automatically:
-// - "Transaction Tags" - Stores custom transaction type overrides
+// 1. Update SPREADSHEET_ID with your actual Google Sheet ID
+// 2. Update DEST_SHEET_NAME with your main transaction sheet name
+// 3. Deploy as Web App: Execute as "Me", Access "Anyone"
 // 
-// New API endpoints available:
-// - setTransactionTag - Save custom tags for transactions  
-// - getTransactionTags - Get tags for specific transaction
-// - getAllTransactionTags - Get all tags (used internally)
-//
-// Enhanced existing endpoints:
-// - getTransactions - Now includes CustomTags field in response
+// This is a PURE API backend - no authentication logic included.
+// Authentication should be handled separately.
 // =================================================================

@@ -3,47 +3,21 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || localStorage.getItem('apiUr
 
 class ApiService {
   constructor() {
-    this.apiKey = localStorage.getItem('apiKey');
-    this.apiUrl = localStorage.getItem('apiUrl') || '';
+    this.apiUrl = '';
     this.cache = new Map();
     this.CACHE_DURATION = 2 * 60 * 1000; // 2 minutes cache
   }
 
-  setApiKey(key) {
-    this.apiKey = key;
-    localStorage.setItem('apiKey', key);
-  }
-
-  getApiKey() {
-    return this.apiKey || localStorage.getItem('apiKey');
-  }
-
-  clearApiKey() {
-    this.apiKey = null;
-    localStorage.removeItem('apiKey');
-  }
-
   setApiUrl(url) {
     this.apiUrl = url;
-    localStorage.setItem('apiUrl', url);
   }
 
   getApiUrl() {
-    return this.apiUrl || localStorage.getItem('apiUrl') || import.meta.env.VITE_API_URL || '';
-  }
-
-  clearApiUrl() {
-    this.apiUrl = '';
-    localStorage.removeItem('apiUrl');
+    return this.apiUrl || '';
   }
 
   async makeRequest(action, params = {}) {
-    const apiKey = this.getApiKey();
     const apiUrl = this.getApiUrl();
-    
-    if (!apiKey) {
-      throw new Error('API key not found');
-    }
     
     if (!apiUrl) {
       throw new Error('API URL not configured');
@@ -67,7 +41,6 @@ class ApiService {
       
       const url = new URL(apiUrl);
       url.searchParams.set('action', action);
-      url.searchParams.set('apiKey', apiKey);
       url.searchParams.set('callback', callbackName);
       
       Object.entries(params).forEach(([key, value]) => {
@@ -87,11 +60,7 @@ class ApiService {
         document.body.removeChild(script);
         
         if (data.error) {
-          if (data.error.includes('Unauthorized')) {
-            reject(new Error('Invalid API key - please check your credentials'));
-          } else {
-            reject(new Error(`Backend error: ${data.error}`));
-          }
+          reject(new Error(`Backend error: ${data.error}`));
         } else {
           // Cache filteroptions and complete transactions (not individual batches)
           if (action === 'getFilterOptions' || (action === 'getTransactions' && !params.batchSize)) {

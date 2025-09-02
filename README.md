@@ -1,240 +1,182 @@
 # MyFinances - Personal Finance Tracker
 
-A React-based personal finance tracking application with Google Apps Script backend. Provides transaction analysis, spending categorization, and financial reporting capabilities.
+A React-based personal finance tracking application with Google Apps Script backend. Features Google SSO authentication, clean architecture separation, and advanced financial reporting capabilities.
 
-![MyFinances Dashboard](https://img.shields.io/badge/Version-1.0.0-blue.svg)
+![MyFinances Dashboard](https://img.shields.io/badge/Version-2.0.0-blue.svg)
 ![React](https://img.shields.io/badge/React-18.0-blue.svg)
 ![Google Apps Script](https://img.shields.io/badge/Google%20Apps%20Script-Backend-green.svg)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
+![Google SSO](https://img.shields.io/badge/Authentication-Google%20SSO-red.svg)
+
+## 🚀 Latest Updates (September 2025)
+
+### ✨ Major Authentication Overhaul
+- **Google SSO Integration**: Migrated from API key to Google authentication
+- **Permissions-Based Access**: Access control managed through Google Sheets sharing
+- **Clean Architecture**: Separated authentication and API backends
+- **Native Google Popup**: Uses Google's default authentication (no custom UI)
+- **Two-URL Setup**: Separate endpoints for authentication and data operations
 
 ## Features
 
-### Dashboard Analytics
+### 🔐 Authentication & Security
+- **Google SSO Authentication**: Secure login using Google accounts
+- **Spreadsheet Access Control**: Access managed through Google Sheets permissions
+- **Clean Architecture**: Separated authentication and API concerns
+- **Native Google Experience**: Uses Google's default authentication popup
+- **Persistent Sessions**: One-time URL setup with automatic authentication
+
+### 📊 Dashboard Analytics
 - Financial KPI calculations (spending, income, net flow, transaction count)
 - Chart.js visualizations for spending trends and category analysis
 - Payment method breakdown with pie charts
 - Time-based spending pattern analysis
 
-### Calendar View
+### 📅 Calendar View
 - Date-based transaction browsing interface
 - Category assignment and modification capabilities
 - Daily transaction summaries
 - Transaction density indicators
 
-### Reports
+### 📈 Reports
 - Multi-criteria filtering system (date range, banks, payment methods, transaction types)
+- Server-side filtering for optimal performance
 - Sortable transaction tables with column-based sorting
 - Category and payment method distribution analysis
 - Export capabilities for filtered datasets
 
-### Transaction Management
+### 🏷️ Transaction Management
 - Automated transaction type detection and categorization
 - Internal transfer identification and exclusion algorithms
 - Custom category creation and management
-- Manual classification override system
+- Editable transaction tags with persistent storage
 - Cross-device category synchronization via Google Sheets
-
-### Security
-- Environment-based configuration management
-- API key authentication system
-- Client-side credential storage
-- No hardcoded sensitive data
 
 ## Google Apps Script Integration
 
-This application uses Google Apps Script as a serverless backend solution.
+This application uses Google Apps Script with a **clean two-backend architecture**.
 
-### Architecture Design
+### 🏗️ Architecture Design
 
-The system implements a three-tier architecture:
+The system implements a **separated architecture** for better maintainability:
 
 ```
-Frontend (React) ←→ Google Apps Script ←→ Google Sheets (Database)
-     ↑                      ↑                     ↑
-- User Interface      - API Endpoints      - Data Storage  
-- Data Visualization  - Business Logic     - User Preferences
-- Local Caching       - Authentication     - Transaction Data
-- State Management    - Data Processing    - Custom Categories
+Frontend (React) ←→ Auth Backend ←→ Google Authentication
+                 ↘                      ↙
+                  → API Backend ←→ Google Sheets (Database)
+                         ↑              ↑
+                  - API Endpoints  - Data Storage  
+                  - Business Logic - User Preferences
+                  - Data Processing- Transaction Data
+                  - Caching       - Custom Categories
 ```
 
-### Implementation Details
+### 📁 Backend Structure
 
-The Google Apps Script backend provides the following functionality:
+#### 🔐 backend-auth.gs (Authentication Only)
+**Pure Google authentication with native popup**
 
-#### Core API Endpoints
-
-**doGet(e)**: Main request handler
 ```javascript
 function doGet(e) {
-  const action = e.parameter.action;
-  const apiKey = e.parameter.apiKey;
+  // This automatically triggers Google's native login if user isn't authenticated
+  const user = Session.getActiveUser();
+  const email = user.getEmail();
   
-  if (!validateApiKey(apiKey)) {
-    return createResponse({ error: 'Invalid API key' });
+  // Check spreadsheet access permissions
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheets()[0];
+    sheet.getRange(1, 1, 1, 1).getValues(); // Test access
+    
+    // Return clean JSON response
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      user: { email, name: email.split('@')[0], timestamp: Date.now() }
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      error: `Access denied. Please ask the sheet owner to share it with ${email}.`
+    })).setMimeType(ContentService.MimeType.JSON);
   }
-  
-  switch (action) {
-    case 'getTransactions': return getTransactions(e.parameter);
-    case 'getSummary': return getSummary(e.parameter);
-    case 'setTransactionTag': return setTransactionTag(e.parameter);
+}
+```
+
+#### 📊 backend-api.gs (Data Operations Only)
+**Pure API with all data operations**
+
+```javascript
+function doGet(e) {
+  // Handle all API actions
+  switch (e.parameter.action) {
+    case 'getTransactions': 
+      return createJsonpResponse(getTransactions_(e.parameter), e.parameter.callback);
+    case 'getSummary': 
+      return createJsonpResponse(getSummary_(e.parameter), e.parameter.callback);
+    case 'setTransactionTag': 
+      return createJsonpResponse(setTransactionTag_(e.parameter), e.parameter.callback);
     // Additional endpoints...
   }
 }
 ```
 
-**getTransactions(filters)**: Data retrieval with server-side filtering
-```javascript
-function getTransactions(filters) {
-  const sheet = SpreadsheetApp.openById(SHEET_ID).getActiveSheet();
-  const data = sheet.getDataRange().getValues();
-  
-  const filteredData = data.filter(row => {
-    return matchesDateRange(row, filters.startDate, filters.endDate) &&
-           matchesBank(row, filters.banks) &&
-           matchesMethod(row, filters.methods);
-  });
-  
-  return createResponse({ transactions: filteredData });
-}
-```
+### 🎯 Key Benefits of Separation
 
-**getSummary(period)**: Financial calculations
-```javascript
-function getSummary(period) {
-  const transactions = getAllTransactions();
-  const summary = {
-    totalSpending: calculateSpending(transactions, period),
-    totalIncome: calculateIncome(transactions, period),
-    netFlow: calculateNetFlow(transactions, period),
-    transactionCount: transactions.length
-  };
-  
-  return createResponse({ summary });
-}
-```
+1. **Clean Architecture**: Each backend has a single, clear responsibility
+2. **Better Security**: Can configure different access levels if needed
+3. **Easier Deployment**: Deploy each script separately with appropriate permissions
+4. **Maintainability**: Changes to auth don't affect API and vice versa
+5. **Scalability**: Can potentially use different Google Apps Script projects
 
-**setTransactionTag(id, key, value)**: Metadata management
+### ⚡ Performance Optimizations
+
+#### Server-Side Filtering
 ```javascript
-function setTransactionTag(transactionId, tagKey, tagValue) {
-  const tagsSheet = getOrCreateSheet('TransactionTags');
-  const existingRow = findTagRow(tagsSheet, transactionId, tagKey);
+function getTransactions_(params) {
+  let data = getAllTransactions();
   
-  if (existingRow) {
-    tagsSheet.getRange(existingRow, 3).setValue(tagValue);
-  } else {
-    tagsSheet.appendRow([transactionId, tagKey, tagValue, new Date()]);
+  // Date range filtering on server
+  if (params.startDate && params.endDate) {
+    const startDate = new Date(params.startDate);
+    const endDate = new Date(params.endDate);
+    data = data.filter(r => {
+      const txnDate = new Date(r.Timestamp);
+      return txnDate >= startDate && txnDate <= endDate;
+    });
   }
   
-  return createResponse({ success: true });
-}
-```
-
-#### Data Structure
-
-The system uses multiple sheets within a single Google Spreadsheet:
-- **Main Sheet**: Transaction records with standardized column structure
-- **TransactionTags**: User-defined classifications and categories
-- **CustomCategories**: User-created category definitions
-- **UserPreferences**: Application configuration settings
-
-#### Security Implementation
-
-**Authentication**: API key-based request validation
-```javascript
-const API_KEY = 'user-defined-secure-key';
-
-function validateApiKey(providedKey) {
-  return providedKey === API_KEY;
-}
-```
-
-**CORS Handling**: JSONP implementation for cross-origin requests
-```javascript
-function createResponse(data, callback) {
-  const json = JSON.stringify(data);
-  const response = callback ? `${callback}(${json})` : json;
-  
-  return ContentService
-    .createTextOutput(response)
-    .setMimeType(ContentService.MimeType.JAVASCRIPT);
-}
-```
-
-#### Performance Optimization
-
-**Batch Processing**: Large dataset handling
-```javascript
-function getTransactionsBatch(batchNumber, batchSize) {
-  const startRow = (batchNumber * batchSize) + 2;
-  const numRows = Math.min(batchSize, getTotalRows() - startRow + 1);
-  
-  if (numRows <= 0) {
-    return { transactions: [], hasMore: false };
-  }
-  
-  const range = sheet.getRange(startRow, 1, numRows, getLastColumn());
-  const values = range.getValues();
-  
-  return {
-    transactions: values.map(formatTransaction),
-    hasMore: startRow + numRows - 1 < getTotalRows()
-  };
-}
-```
-
-**Caching**: Request optimization
-```javascript
-function getCachedData(key, dataFunction, cacheMinutes = 5) {
-  const cache = CacheService.getScriptCache();
-  let cached = cache.get(key);
-  
-  if (cached) {
-    return JSON.parse(cached);
-  }
-  
-  const data = dataFunction();
-  cache.put(key, JSON.stringify(data), cacheMinutes * 60);
+  // Additional server-side filtering...
   return data;
 }
 ```
 
-#### Error Handling
-
-**Exception Management**:
+#### Intelligent Batching
 ```javascript
-function handleError(error, context) {
-  console.error(`Error in ${context}:`, error);
-  
-  return createResponse({
-    error: 'Internal server error',
-    message: error.message,
-    context: context
-  });
+// Handle large datasets with automatic batching
+const batchSize = parseInt(params.batchSize) || 0;
+if (batchSize > 0) {
+  const startIndex = batchNumber * batchSize;
+  const endIndex = startIndex + batchSize;
+  return {
+    transactions: data.slice(startIndex, endIndex),
+    totalCount: data.length,
+    hasMore: endIndex < data.length
+  };
 }
 ```
 
-### Deployment Requirements
+#### Advanced Caching
+```javascript
+const cache = CacheService.getScriptCache();
+const CACHEABLE_ACTIONS = ['getSummary', 'getFilterOptions', 'getTransactions'];
 
-1. Google Apps Script project creation
-2. Backend code implementation
-3. SHEET_ID and API_KEY configuration
-4. Google Sheets access permissions
-5. Web application deployment with public access
-6. URL generation for frontend integration
+if (CACHEABLE_ACTIONS.includes(action)) {
+  const cached = cache.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+}
+```
 
-### System Limitations
-
-**Execution Constraints**:
-- 6-minute maximum execution time per request
-- Handled through batch processing and client-side pagination
-- Daily quota limits: 6 hours execution time, 100MB runtime storage
-
-**Performance Considerations**:
-- Cold start latency for first request after inactivity
-- Server-side filtering recommended for large datasets
-- Client-side caching implemented for UI responsiveness
-
-## Installation
+## Installation & Setup
 
 ### Prerequisites
 
@@ -242,7 +184,7 @@ function handleError(error, context) {
 - Google Account with Sheets and Apps Script access
 - Transaction data in supported format
 
-### Setup Process
+### 🔧 Setup Process
 
 #### 1. Frontend Installation
 
@@ -250,169 +192,183 @@ function handleError(error, context) {
 git clone https://github.com/mubaraknumann/MyFinances.git
 cd MyFinances
 npm install
-cp .env.example .env
+npm run dev
 ```
 
-#### 2. Data Preparation
+#### 2. Backend Deployment
+
+**Deploy Authentication Backend:**
+1. Create new Google Apps Script project at script.google.com
+2. Copy `backend-auth.gs` content
+3. Update `SPREADSHEET_ID` with your Google Sheet ID
+4. Deploy as Web App: Execute as "Me", Access "Anyone"
+5. Copy the deployment URL (Authentication URL)
+
+**Deploy API Backend:**
+1. Create another Google Apps Script project (or use separate file in same project)
+2. Copy `backend-api.gs` content  
+3. Update `SPREADSHEET_ID` with your Google Sheet ID
+4. Deploy as Web App: Execute as "Me", Access "Anyone"
+5. Copy the deployment URL (API URL)
+
+#### 3. Google Sheets Preparation
 
 Create Google Sheet with required columns:
 ```
 A: Transaction_ID      (Unique identifier)
 B: Timestamp          (Date: YYYY-MM-DD HH:MM:SS)
 C: Bank               (Bank name)
-D: Recipient_Merchant (Merchant/Recipient name)
-E: Amount             (Numeric amount)
+D: Account_Identifier (Account number/identifier)
+E: Transaction_Method (UPI, Card, NEFT, etc.)
 F: Debit_Credit       (Either "Debit" or "Credit")
-G: Transaction_Method (Payment method)
-H: Category           (Optional: Transaction category)
+G: Amount             (Numeric amount)
+H: Recipient_Merchant (Merchant/Recipient name)
 I: Raw_Message        (Optional: Original bank message)
 ```
 
-Sample data format:
-```
-Transaction_ID | Timestamp           | Bank      | Recipient_Merchant | Amount | Debit_Credit | Transaction_Method | Category
-TXN001        | 2024-01-15 14:30:00 | HDFC Bank | Amazon            | 2500   | Debit        | UPI               | Shopping
-TXN002        | 2024-01-15 09:15:00 | HDFC Bank | Salary Credit     | 75000  | Credit       | NEFT              | Income
-```
-
-#### 3. Backend Configuration
-
-1. Create Google Apps Script project at script.google.com
-2. Replace default code with `updated-backend-script.gs` content
-3. Configure constants:
-   ```javascript
-   const SHEET_ID = 'your-google-sheet-id';
-   const API_KEY = 'your-secure-api-key';
-   ```
-4. Deploy as web application with public access
-5. Copy deployment URL
-
-#### 4. Frontend Configuration
-
-Update `.env` file:
-```env
-VITE_API_URL=https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec
-```
-
-Start development server:
-```bash
-npm run dev
-```
-
-#### 5. Authentication Setup
+#### 4. Application Setup
 
 1. Access application at http://localhost:3000
-2. Enter Google Apps Script URL
-3. Provide API key
-4. Verify connection
+2. Enter **Authentication URL** (from backend-auth.gs deployment)
+3. Enter **API URL** (from backend-api.gs deployment)
+4. Click "Save & Continue with Google"
+5. Google's native authentication popup will appear
+6. Grant permissions for Google Sheets access
+7. Verify connection to your financial data
+
+### 🔐 Access Control
+
+Access is managed through **Google Sheets sharing permissions**:
+
+1. Share your Google Sheet with users who need access
+2. Users authenticate with their Google accounts
+3. System verifies they have access to the shared sheet
+4. No additional user management required
+
+## 🎨 User Experience
+
+### Authentication Flow
+1. **One-Time Setup**: Enter Authentication URL and API URL
+2. **Native Google Login**: Click button → Google's default popup appears
+3. **Automatic Access Check**: System verifies sheet permissions
+4. **Seamless Experience**: Subsequent logins are automatic
+
+### URL Management
+- URLs saved permanently in localStorage
+- Settings panel allows viewing current URLs
+- "Clear All Data" option for complete reset
+- No need to re-enter URLs unless changing backends
 
 ## Configuration
 
-### Transaction Filtering
+### Transaction Classification
 
 Modify filtering logic in `src/utils/transactionFilters.js`:
 
 ```javascript
-// Time window for transfer detection
-const timeWindowMs = 10 * 60 * 1000; // 10 minutes
+// Internal transfer detection
+const timeWindowMs = 5 * 60 * 1000; // 5 minutes
 
-// Bank configuration for internal transfer detection
+// User's banks for transfer detection
 const userBanks = [
   'axis bank', 'hdfc bank', 'hsbc', 'icici bank', 'idfc first bank'
 ];
 
-// Transfer pattern recognition
-const transferPatterns = [
-  'credit card payment', 'cc payment', 'auto transfer'
+// Bill payment patterns
+const billPatterns = [
+  'electricity', 'gas', 'water', 'internet', 'mobile', 'phone',
+  'insurance', 'premium', 'utility', 'bill', 'recharge'
 ];
 ```
 
-### Category Management
+### Custom Categories
 
-Default categories defined in `src/utils/categoryManager.js`:
+Default categories in `src/utils/transactionTags.js`:
 
 ```javascript
 const DEFAULT_CATEGORIES = [
   'Food & Dining', 'Shopping', 'Entertainment', 'Transport',
   'Bills & Utilities', 'Healthcare', 'Travel', 'Education',
-  'Investment', 'Other'
+  'Investment', 'Internal Transfer', 'Other'
 ];
 ```
 
-## Development
+## 📂 Project Structure
 
-### Project Structure
 ```
 MyFinances/
 ├── src/
 │   ├── components/          # UI components
-│   │   ├── AuthGate.jsx    # Authentication handler
+│   │   ├── AuthGate.jsx    # ✨ Updated: Google SSO with two URLs
 │   │   ├── Layout.jsx      # Application layout
 │   │   ├── TransactionTags.jsx # Tag management
-│   │   ├── TransactionCalendar.jsx # Calendar interface
 │   │   └── CategoryModal.jsx # Category editor
 │   ├── pages/              # Route components
 │   │   ├── Dashboard.jsx   # Financial dashboard
-│   │   ├── Calendar.jsx    # Transaction calendar
+│   │   ├── Transactions.jsx # Transaction management
 │   │   └── Reports.jsx     # Reporting interface
 │   ├── services/           # External integrations
-│   │   └── api.js         # Google Apps Script client
-│   ├── utils/             # Utility functions
-│   │   ├── transactionFilters.js # Transaction processing
-│   │   ├── transactionTags.js    # Categorization logic
-│   │   └── categoryManager.js    # Category management
-│   └── styles/            # CSS files
-├── updated-backend-script.gs # Google Apps Script backend
-└── package.json          # Dependencies and scripts
+│   │   └── api.js         # ✨ Updated: Works with separate API URL
+│   └── utils/             # Utility functions
+│       ├── transactionFilters.js # Transaction processing
+│       ├── transactionTags.js    # Categorization logic
+│       └── categoryManager.js    # Category management
+├── backend-auth.gs         # ✨ NEW: Pure authentication backend
+├── backend-api.gs          # ✨ NEW: Pure API backend
+├── backend-unified.gs      # ⚠️ DEPRECATED: Old unified approach
+└── package.json           # Dependencies and scripts
 ```
 
-### Available Commands
+## 🚀 Development Commands
 
 ```bash
-npm run dev      # Development server
+npm run dev      # Development server (http://localhost:3000)
 npm run build    # Production build
 npm run preview  # Preview production build
 npm run lint     # Code linting
 ```
 
-### Adding Features
+## 🔧 Advanced Features
 
-#### New Categories
-1. Update `DEFAULT_CATEGORIES` in `categoryManager.js`
-2. Categories sync automatically across devices
+### Transaction Tagging System
+- **Automated Classification**: Spending, Income, Internal Transfer, Bill Payment
+- **Editable Tags**: Click-to-edit dropdown interface
+- **Persistent Storage**: Tags saved to Google Sheets "Transaction Tags" sheet
+- **Real-time Updates**: Changes reflected immediately in UI
 
-#### New Chart Types
-1. Install Chart.js plugins: `npm install chartjs-plugin-name`
-2. Register plugin in component imports
-3. Implement chart component
-4. Configure data processing
+### Internal Transfer Detection
+- **Paired Transaction Analysis**: Matches opposite amounts within time windows
+- **Multi-Bank Support**: Handles transfers between different user accounts
+- **Smart Exclusion**: Avoids marking legitimate expenses as transfers
 
-#### Custom Filters
-1. Add filter UI in Reports.jsx
-2. Update state management
-3. Modify backend query logic
-4. Update URL parameters for persistence
+### Performance Optimizations
+- **Server-Side Filtering**: Filtering happens on Google Apps Script server
+- **Intelligent Batching**: Automatic handling of large datasets
+- **Advanced Caching**: Multi-layer caching with 2-minute duration
+- **Hybrid Architecture**: Fallback to client-side when needed
 
 ## Troubleshooting
 
 ### Common Issues
 
-**Authentication Errors**
+**Authentication Problems**
 ```
-Error: Invalid API key
+Error: Authentication failed
 Solution: 
-- Verify API key matches Google Apps Script configuration
-- Confirm API URL is correct
-- Ensure Google Apps Script is deployed as web app
+- Ensure Google Sheets is shared with your account
+- Check that backend-auth.gs is deployed correctly
+- Verify Authentication URL is correct
+- Try clearing browser cache and localStorage
 ```
 
-**CORS Issues**
+**API Connection Issues**
 ```
-Error: Access blocked by CORS policy
+Error: Could not connect to API
 Solution:
-- Application uses JSONP to bypass CORS
-- Verify Google Apps Script returns JSONP response
-- Check callback parameter handling
+- Verify API URL is correct and backend-api.gs is deployed
+- Check that both scripts have the same SPREADSHEET_ID
+- Test API URL directly in browser
+- Ensure Google Apps Script execution policy allows public access
 ```
 
 **Data Loading Problems**
@@ -420,163 +376,107 @@ Solution:
 Error: No transactions found
 Solution:
 - Verify Google Sheet column headers match required format
-- Confirm Sheet ID in Google Apps Script
+- Confirm SPREADSHEET_ID in both backend scripts
 - Check data format consistency
-- Test Google Apps Script URL directly
+- Ensure user has read access to the sheet
 ```
 
-**Performance Issues**
-```
-Issue: Slow loading with large datasets
-Solution:
-- Enable transaction batching (default: 1000 per batch)
-- Implement server-side filtering
-- Use date range filters
-- Consider data archiving for historical transactions
-```
-
-### Debug Configuration
+### Debug Mode
 
 Enable detailed logging:
 
 ```javascript
 // In src/services/api.js
-const DEBUG_MODE = true;
+console.log('API request:', action, params);
 
 // In Google Apps Script
-function debug(message) {
-  console.log(`[DEBUG] ${new Date().toISOString()}: ${message}`);
-}
+Logger.log(`Processing ${action} with params:`, params);
 ```
-
-### Browser Support
-
-**Desktop Browsers:**
-- Chrome 90+
-- Firefox 88+
-- Safari 14+
-- Edge 90+
-
-**Mobile Browsers:**
-- iOS Safari 14+
-- Android Chrome 90+
 
 ## Deployment
 
-### Frontend Deployment
+### Frontend Deployment Options
 
 #### Vercel
 ```bash
 npm i -g vercel
 vercel
-# Configure VITE_API_URL in dashboard
+# No environment variables needed - URLs configured at runtime
 ```
 
 #### Netlify
 ```bash
-npm i -g netlify-cli
 npm run build
-netlify deploy --prod --dir=dist
+# Deploy dist/ folder to Netlify
+# No build-time configuration required
 ```
 
 #### GitHub Pages
 ```bash
 npm install --save-dev gh-pages
-# Add "deploy": "npm run build && gh-pages -d dist" to package.json
-npm run deploy
+npm run build
+npx gh-pages -d dist
 ```
 
-### Backend Optimization
+### Production Considerations
 
-#### Performance Tuning
-```javascript
-// Caching implementation
-const cache = CacheService.getScriptCache();
-
-// Batch operations
-const batchSize = 100;
-
-// Parallel processing
-const parallelPromises = chunks.map(chunk => processChunk(chunk));
-```
-
-#### Rate Limiting
-```javascript
-const RATE_LIMIT = 100; // requests per minute
-const rateLimitCache = CacheService.getScriptCache();
-```
+1. **Backend URLs**: Use production Google Apps Script URLs
+2. **HTTPS**: Ensure both auth and API backends use HTTPS
+3. **Access Control**: Configure Google Sheet sharing appropriately
+4. **Performance**: Enable caching in Google Apps Script
+5. **Monitoring**: Set up Google Apps Script execution logging
 
 ## Usage
 
-### Basic Workflow
+### Getting Started
 
-1. Import transaction data to Google Sheets
-2. Configure and deploy Google Apps Script backend
-3. Start frontend application
-4. Authenticate with API credentials
-5. Review dashboard analytics
-6. Categorize transactions using calendar view
-7. Generate reports with filtering options
+1. **Setup**: Deploy backends and enter URLs in application
+2. **Authentication**: Sign in with Google account (one-time per device)
+3. **Data Import**: Import transaction data to Google Sheets
+4. **Exploration**: Use dashboard to view spending patterns
+5. **Categorization**: Tag transactions using the transaction list
+6. **Reporting**: Generate filtered reports for analysis
 
-### Data Management
+### Best Practices
 
-#### Transaction Import
-- Export CSV/Excel from banking applications
-- Map columns to required format
-- Import using Google Sheets interface
-- Validate data consistency
-
-#### Category Assignment
-- Use calendar view for individual transaction categorization
-- Apply bulk category updates in reports view
-- Create custom categories as needed
-- Categories sync automatically across devices
+- **Regular Backups**: Download Google Sheets data periodically
+- **Category Consistency**: Use consistent categorization for better insights
+- **Data Quality**: Ensure transaction data is clean and formatted correctly
+- **Access Management**: Share Google Sheet only with trusted users
+- **Performance**: Use date range filters for large datasets
 
 ## Contributing
 
-### Development Setup
+### Development Guidelines
+
+1. Follow existing code patterns and React best practices
+2. Test authentication flow with both backends
+3. Ensure responsive design works on mobile devices
+4. Update documentation for new features
+5. Consider performance impact of changes
+
+### Pull Request Process
+
 ```bash
 git clone https://github.com/YOUR_USERNAME/MyFinances.git
 cd MyFinances
 git checkout -b feature/feature-name
-# Make changes
-git commit -m "Description of changes"
+# Make changes and test thoroughly
+git commit -m "feat: description of changes"
 git push origin feature/feature-name
-# Create pull request
+# Create pull request with detailed description
 ```
-
-### Guidelines
-
-1. Follow existing code patterns and conventions
-2. Test changes thoroughly across different browsers
-3. Update documentation for new features
-4. Do not commit sensitive information
-5. Consider performance impact of changes
-
-### Issue Reporting
-
-Use GitHub Issues with the following information:
-- Clear description of the problem
-- Steps to reproduce the issue
-- Expected vs actual behavior
-- Environment details (OS, browser, version)
-- Screenshots if applicable
 
 ## License
 
 MIT License - see LICENSE file for details.
 
-## Dependencies
-
-- **Chart.js**: Data visualization library
-- **Tailwind CSS**: Utility-first CSS framework
-- **React Router**: Client-side routing
-- **date-fns**: Date manipulation utilities
-- **Heroicons**: SVG icon library
-- **Google Apps Script**: Serverless backend platform
-
 ## Support
 
-- GitHub Issues for bug reports and feature requests
-- Documentation in README and code comments
-- Community contributions and discussions
+- **GitHub Issues**: Bug reports and feature requests
+- **Documentation**: README and inline code comments
+- **Community**: Discussions and contributions welcome
+
+---
+
+**MyFinances v2.0** - Now with Google SSO authentication and clean architecture separation for enhanced security and maintainability.
